@@ -67,7 +67,8 @@ chmod +x scripts/run_demo.sh
 | `include/config.hpp` | Backend list, ports, intervals |
 
 ## License
-<img width="616" height="341" alt="image" src="https://github.com/user-attachments/assets/78a91d79-cfd5-435b-8d73-0b8340929348" />
+
+![image](https://github.com/user-attachments/assets/aeb9633d-3a04-46c4-9420-a5f37d6b9d29)
 ![image](https://github.com/user-attachments/assets/33f00576-5231-4866-ad27-a09e3e795a8e)
 ![image](https://github.com/user-attachments/assets/86e01c23-5b2c-4c26-9b2b-93b1874e7472)
 
