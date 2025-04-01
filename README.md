@@ -4,13 +4,6 @@ PaxBalancer is a lightweight **L4 (TCP) load balancer** built with **raw POSIX s
 
 The demo backends speak minimal **HTTP** so you can `curl` or run the included client; the balancer itself only forwards bytes and does not parse HTTP (L4).
 
-## Design (interview notes)
-
-- **Round-robin:** `std::atomic<uint64_t>` counter; each dispatch does `fetch_add(1) % N` under a **shared lock** while reading the healthy `std::vector` (hot path). The counter stays lock-free; the list uses `std::shared_mutex` because it only changes when the health checker updates membership.
-- **Threads:** main thread `accept()` loop; **one detached thread per accepted client** runs a **bidirectional relay** (`poll` + `read`/`write`). A separate **health** thread periodically rebuilds the healthy set.
-- **Health checks:** **active** probing — TCP `connect` with timeout (not passive inference from application traffic). Interval: `k_health_check_interval_sec` in `include/config.hpp`.
-- **Limitations:** thread-per-connection does not scale to huge fan-in; production systems use `epoll`/`kqueue` and often connection pooling, weighted routing, and graceful draining. Mid-transfer backend failure closes the pair; there is no retry/failover for in-flight data.
-
 ## Build
 
 ```bash
