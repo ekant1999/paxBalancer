@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "paxBalancer": {
-      "commandName": "Project",
-      "commandLineArgs": "localhost 6026"
-    }
-  }
-}

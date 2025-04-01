@@ -1,69 +1,72 @@
-# ⚖️ PaxBalancer (C#) – Application-Layer HTTP Load Balancer
+# PaxBalancer (C++)
 
-**PaxBalancer** is a lightweight, multi-threaded HTTP load balancer written from scratch in **C#**. It distributes incoming HTTP requests across multiple backend servers using a **round-robin algorithm**, and ensures **high availability** through periodic **health checks**.
+PaxBalancer is a lightweight **L4 (TCP) load balancer** built with **raw POSIX sockets** and **C++17** — no frameworks. It sits in front of a pool of backend servers, distributes new client connections with **round-robin**, and runs a **watchdog thread** that probes backends with **TCP connect** attempts (configurable interval and timeout). Unhealthy backends are removed from rotation until they recover.
 
-This project was built to deepen understanding of networking, concurrency, and fault tolerance by implementing all core features manually using .NET sockets and threading.
+The demo backends speak minimal **HTTP** so you can `curl` or run the included client; the balancer itself only forwards bytes and does not parse HTTP (L4).
 
----
+## Design (interview notes)
 
-## 🚀 Features
+- **Round-robin:** `std::atomic<uint64_t>` counter; each dispatch does `fetch_add(1) % N` under a **shared lock** while reading the healthy `std::vector` (hot path). The counter stays lock-free; the list uses `std::shared_mutex` because it only changes when the health checker updates membership.
+- **Threads:** main thread `accept()` loop; **one detached thread per accepted client** runs a **bidirectional relay** (`poll` + `read`/`write`). A separate **health** thread periodically rebuilds the healthy set.
+- **Health checks:** **active** probing — TCP `connect` with timeout (not passive inference from application traffic). Interval: `k_health_check_interval_sec` in `include/config.hpp`.
+- **Limitations:** thread-per-connection does not scale to huge fan-in; production systems use `epoll`/`kqueue` and often connection pooling, weighted routing, and graceful draining. Mid-transfer backend failure closes the pair; there is no retry/failover for in-flight data.
 
-- 🔁 **Round-Robin Request Distribution**  
-  Balances load evenly across all healthy backend servers.
+## Build
 
-- ❤️ **Health Checks**  
-  Periodically checks `/health` endpoint on each backend. Unhealthy servers are removed from rotation and re-added when they recover.
+```bash
+mkdir -p build && cd build
+cmake ..
+cmake --build .
+```
 
-- ⚡ **Multi-threaded Client Handling**  
-  Each client connection is handled in its own thread, supporting high concurrency.
+If CMake is unavailable:
 
-- 🧪 **Simulated Server Failure**  
-  Backend servers can be configured to delay or crash after a number of requests to test load balancer fault handling.
+```bash
+mkdir -p build
+clang++ -std=c++17 -Wall -Wextra -I include -pthread -o build/pax_balancer src/load_balancer.cpp
+clang++ -std=c++17 -Wall -Wextra -I include -pthread -o build/backend_server src/backend_server.cpp
+clang++ -std=c++17 -Wall -Wextra -I include -pthread -o build/pax_client src/client.cpp
+```
 
----
-# PaxBalancer System
+## Run
 
-This repository contains a complete setup for a load-balanced server-client system with the following components:
+1. Start four backends (ports `6025`–`6028` by default):
 
-- **PaxBalanceProj** – Launches all server instances in parallel.
-- **ServerProject** – Contains the server implementations.
-- **LoadBalancer** – Routes client requests to server instances.
-- **Client** – Sends requests to the load balancer.
+   ```bash
+   ./build/backend_server 6025 &
+   ./build/backend_server 6026 &
+   ./build/backend_server 6027 &
+   ./build/backend_server 6028 &
+   ```
 
-## 🏃‍♂️ Running the Project
+2. Start the load balancer (default listen `6020`):
 
-### 🧱 Prerequisites
-- [.NET 6 SDK or later](https://dotnet.microsoft.com/download)
-- Git CLI or any Git GUI
+   ```bash
+   ./build/pax_balancer
+   ```
 
----
+3. Send traffic (optional):
 
-### 📥 1. Clone the Repository
+   ```bash
+   ./build/pax_client 127.0.0.1 6020 20
+   ```
 
-- git clone https://github.com/your-username/PaxBalanceProj.git
-- cd PaxBalanceProj
+Or use the helper script (starts backends + balancer + a short client run):
 
-### 📥 2. Build All Projects
+```bash
+chmod +x scripts/run_demo.sh
+./scripts/run_demo.sh
+```
 
-- dotnet build PaxBalanceProj.sln
+## Layout
 
-### 📥 3. Build ServerProject and Copy exe
-- If you built in Debug mode:
-    ServerProject/bin/Debug/net6.0/ServerProject.exe
--  If you built in Release mode:
-     ServerProject/bin/Release/net6.0/ServerProject.exe
-- Copy the full path and update the exePath variable in Program.cs of the PaxBalanceProj.
-This is used to launch backend servers in parallel from code.
+| Path | Role |
+|------|------|
+| `src/load_balancer.cpp` | Listener, atomic RR, health thread, per-connection relay |
+| `src/backend_server.cpp` | Demo HTTP backend; `/health` may randomly return 503 (demo only) |
+| `src/client.cpp` | Demo client hitting the balancer |
+| `include/config.hpp` | Backend list, ports, intervals |
 
-### 📥 4. Start the Load Balancing System
-- Run projects in this order:
-   - Run PaxBalanceProj
-   - Run LoadBalancer project
-   - Run ClientProject
+## License
 
-![image](https://github.com/user-attachments/assets/aeb9633d-3a04-46c4-9420-a5f37d6b9d29)
-![image](https://github.com/user-attachments/assets/33f00576-5231-4866-ad27-a09e3e795a8e)
-![image](https://github.com/user-attachments/assets/86e01c23-5b2c-4c26-9b2b-93b1874e7472)
-
-
-
+Use and modify as you like for learning and interviews.
